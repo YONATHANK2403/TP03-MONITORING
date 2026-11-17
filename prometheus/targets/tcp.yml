@@ -1,0 +1,5 @@
+# Services sondés en TCP (module tcp_connect : succès si le port accepte la connexion).
+- targets: ["demo-redis:6379"]
+  labels: { service: demo-redis, tier: demo }
+# - targets: ["ma-base:5432"]
+#   labels: { service: ma-base, tier: data }

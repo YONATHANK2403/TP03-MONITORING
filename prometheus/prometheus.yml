@@ -1,0 +1,78 @@
+# =============================================================================
+# Prometheus - configuration TP03
+# =============================================================================
+global:
+  scrape_interval: 15s        # fréquence de collecte par défaut
+  scrape_timeout: 10s         # doit rester < scrape_interval
+  evaluation_interval: 15s    # fréquence d'évaluation des règles d'alerte
+  external_labels:
+    environment: tp03
+
+rule_files:
+  - rules/*.yml
+
+scrape_configs:
+  # --- Prometheus se supervise lui-même
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+        labels: { service: prometheus }
+
+  # --- Métriques système de l'hôte : CPU, RAM, disque, réseau, uptime...
+  - job_name: node-exporter
+    scrape_interval: 15s
+    static_configs:
+      - targets: ["node-exporter:9100"]
+        labels: { instance: docker-host, service: node-exporter }
+
+  # --- Métriques des conteneurs Docker (plus coûteux : intervalle plus long)
+  - job_name: cadvisor
+    scrape_interval: 30s
+    static_configs:
+      - targets: ["cadvisor:8080"]
+        labels: { service: cadvisor }
+
+  # --- Grafana (endpoint /metrics natif)
+  - job_name: grafana
+    static_configs:
+      - targets: ["grafana:3000"]
+        labels: { service: grafana }
+
+  # --- Blackbox Exporter (état de la sonde elle-même)
+  - job_name: blackbox
+    static_configs:
+      - targets: ["blackbox-exporter:9115"]
+        labels: { service: blackbox-exporter }
+
+  # --- Sondes HTTP : disponibilité des services applicatifs
+  #     Les cibles se déclarent dans targets/http.yml (rechargées sans redémarrage)
+  - job_name: blackbox-http
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    file_sd_configs:
+      - files: ["targets/http.yml"]
+        refresh_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # --- Sondes TCP : ports ouverts (base de données, cache, ...)
+  - job_name: blackbox-tcp
+    metrics_path: /probe
+    params:
+      module: [tcp_connect]
+    file_sd_configs:
+      - files: ["targets/tcp.yml"]
+        refresh_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115

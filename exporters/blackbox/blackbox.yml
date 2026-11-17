@@ -1,0 +1,23 @@
+# Modules de sonde Blackbox Exporter
+modules:
+  http_2xx:
+    prober: http
+    timeout: 5s
+    http:
+      valid_status_codes: []        # [] = tout code 2xx
+      method: GET
+      follow_redirects: true
+      preferred_ip_protocol: ip4
+
+  tcp_connect:
+    prober: tcp
+    timeout: 5s
+    tcp:
+      preferred_ip_protocol: ip4
+
+  # ICMP (ping) : nécessite NET_RAW sur le conteneur blackbox-exporter
+  # icmp:
+  #   prober: icmp
+  #   timeout: 5s
+  #   icmp:
+  #     preferred_ip_protocol: ip4

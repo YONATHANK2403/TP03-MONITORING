@@ -1,0 +1,135 @@
+# =============================================================================
+# TP03 - Plateforme de supervision indépendante
+# Prometheus + Node Exporter + cAdvisor + Blackbox Exporter + Grafana
+# Cible : hôte Linux (VM, serveur, WSL2 avec Docker Engine).
+# Docker Desktop (Windows/macOS) : ajouter  -f docker-compose.desktop.yml
+# =============================================================================
+name: tp03-monitoring
+
+services:
+  # ---------------------------------------------------------------- Prometheus
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROM_RETENTION:-15d}
+      - --web.enable-lifecycle          # rechargement à chaud : POST /-/reload
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./prometheus:/etc/prometheus:ro
+      - prometheus_data:/prometheus
+    extra_hosts:
+      # Node Exporter tourne en network_mode: host (métriques réseau réelles).
+      # Le nom "node-exporter" pointe donc vers la passerelle Docker de l'hôte.
+      - "node-exporter:host-gateway"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks: [monitoring]
+
+  # ------------------------------------------------------------- Node Exporter
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: node-exporter
+    restart: unless-stopped
+    network_mode: host                  # voir les vraies interfaces réseau de l'hôte
+    pid: host                           # voir les vrais processus de l'hôte
+    command:
+      - --path.rootfs=/host
+      - --web.listen-address=:9100
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+    volumes:
+      - /:/host:ro,rslave
+
+  # ------------------------------------------------------------------ cAdvisor
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: cadvisor
+    restart: unless-stopped
+    privileged: true
+    command:
+      - --docker_only=true
+      - --housekeeping_interval=15s
+    ports:
+      - "${CADVISOR_PORT:-8081}:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    devices:
+      - /dev/kmsg
+    networks: [monitoring]
+
+  # ---------------------------------------------------------- Blackbox Exporter
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    container_name: blackbox-exporter
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/blackbox_exporter/config.yml
+    ports:
+      - "${BLACKBOX_PORT:-9115}:9115"
+    volumes:
+      - ./exporters/blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    networks: [monitoring]
+
+  # ------------------------------------------------------------------- Grafana
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: grafana
+    restart: unless-stopped
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/01-systeme.json
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks: [monitoring]
+
+  # ------------------------------------------- Services de démonstration (tests)
+  # Servent uniquement à rendre le TP autonome : on peut les arrêter pour
+  # observer l'indisponibilité, sans dépendre des TP01 / TP02.
+  demo-web:
+    image: nginx:1.27-alpine
+    container_name: demo-web
+    restart: unless-stopped
+    labels: { tp03.role: demo }
+    networks: [monitoring]
+
+  demo-redis:
+    image: redis:7-alpine
+    container_name: demo-redis
+    restart: unless-stopped
+    labels: { tp03.role: demo }
+    networks: [monitoring]
+
+networks:
+  monitoring:
+    name: monitoring            # nom fixe : rattachable depuis d'autres projets
+
+volumes:
+  prometheus_data:
+  grafana_data:

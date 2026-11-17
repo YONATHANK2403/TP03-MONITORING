@@ -1,0 +1,12 @@
+# Surcharge pour Docker Desktop (Windows / macOS) où le "host" est une VM.
+# Usage :  docker compose -f docker-compose.yml -f docker-compose.desktop.yml up -d
+# Node Exporter est alors joint par le réseau Docker (les métriques décrivent la VM Docker).
+# Nécessite Docker Compose >= 2.24 (tags !reset / !override).
+services:
+  node-exporter:
+    network_mode: !reset null
+    networks: [monitoring]
+    volumes: !override
+      - /:/host:ro
+  prometheus:
+    extra_hosts: !reset []

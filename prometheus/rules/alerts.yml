@@ -1,0 +1,46 @@
+groups:
+  - name: tp03-disponibilite
+    rules:
+      - alert: TargetDown
+        expr: up == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "Cible {{ $labels.job }} injoignable"
+          description: "Prometheus ne parvient plus à collecter {{ $labels.instance }} (job {{ $labels.job }}) depuis plus d'une minute."
+
+      - alert: ServiceProbeFailed
+        expr: probe_success == 0
+        for: 30s
+        labels: { severity: critical }
+        annotations:
+          summary: "Service {{ $labels.service }} indisponible"
+          description: "La sonde Blackbox sur {{ $labels.instance }} échoue depuis plus de 30 secondes."
+
+  - name: tp03-ressources
+    rules:
+      - alert: HighCPUUsage
+        expr: 100 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[2m])) * 100 > 85
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "CPU élevé sur {{ $labels.instance }}"
+          description: "Utilisation CPU supérieure à 85 % depuis 5 minutes ({{ $value | printf \"%.1f\" }} %)."
+
+      - alert: HighMemoryUsage
+        expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 > 90
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "RAM élevée sur {{ $labels.instance }}"
+          description: "Mémoire utilisée à {{ $value | printf \"%.1f\" }} % depuis 5 minutes."
+
+      - alert: DiskSpaceLow
+        expr: |
+          100 - (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|devtmpfs"}
+                 / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|devtmpfs"} * 100) > 85
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Disque presque plein : {{ $labels.mountpoint }}"
+          description: "Le point de montage {{ $labels.mountpoint }} est utilisé à {{ $value | printf \"%.1f\" }} %."

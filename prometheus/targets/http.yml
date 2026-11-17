@@ -1,0 +1,11 @@
+# Services sondés en HTTP (module http_2xx : succès si code 2xx/3xx).
+# Ajouter un service = ajouter un bloc ci-dessous. Prise en compte en ~30 s.
+- targets: ["http://demo-web:80"]
+  labels: { service: demo-web, tier: demo }
+- targets: ["http://grafana:3000/api/health"]
+  labels: { service: grafana, tier: monitoring }
+- targets: ["http://prometheus:9090/-/healthy"]
+  labels: { service: prometheus, tier: monitoring }
+# Exemple pour intégrer une application d'un autre TP (réseau Docker partagé) :
+# - targets: ["http://mon-app:8080/health"]
+#   labels: { service: mon-app, tier: application }
